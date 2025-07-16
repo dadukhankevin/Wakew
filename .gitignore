@@ -1,0 +1,107 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+*.log
+logs/
+
+# Audio files (generated training data)
+audio_*/
+*.mp3
+*.wav
+*.flac
+*.m4a
+*.ogg
+
+# Model files (can be large)
+whisper-*/
+whisper-wake-word/
+whisper-multi-wake-word/
+*.pt
+*.pth
+*.bin
+*.safetensors
+
+# Training outputs
+runs/
+tb_logs/
+wandb/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+
+# Temporary files
+*.tmp
+*.temp
+
+# API keys and secrets
+*.key
+config.json
+secrets.json
+
+# Test files
+test_audio/
+temp_audio/
+
+# mypy cache
+.mypy_cache/
+
+# Development files
+sample_*.txt 

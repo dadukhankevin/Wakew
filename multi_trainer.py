@@ -76,7 +76,7 @@ def create_multi_wake_word_dataset(wake_words: List[str], audio_dirs: List[str],
             continue
         
         all_audio_files.extend(audio_files)
-        all_texts.extend([wake_word.lower()] * len(audio_files))
+        all_texts.extend([f" {wake_word}"] * len(audio_files))
         print(f"Added {len(audio_files)} samples for '{wake_word}'")
     
     if len(all_audio_files) == 0:

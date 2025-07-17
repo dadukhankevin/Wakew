@@ -1,4 +1,6 @@
-# Wakew: Wakeword Detection via finetuned Whisper models using Synthetic data.
+# Wakew: Wakeword Detection via Finetuned Whisper Models using Synthetic data.
+
+No, I don't know how it's pronounced.
 
 Real-time wake word detection using fine-tuned Whisper models. Detects wake words anywhere in speech, supports multiple wake words, and uses synthetic training data.
 

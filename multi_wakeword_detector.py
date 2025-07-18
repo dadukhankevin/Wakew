@@ -52,7 +52,7 @@ class MultiWakeWordDetector:
         self.buffer_size = int(sample_rate * 2.0)
         self.speech_buffer = []
         self.silence_chunks = 0
-        self.max_silence_chunks = 2
+        self.max_silence_chunks = 4  # Increased from 2 to keep recording longer
         self.is_recording = False
         
         if verbose:
@@ -143,6 +143,8 @@ class MultiWakeWordDetector:
             self.silence_chunks = 0
         else:
             if self.is_recording:
+                # Add silence chunk to buffer to avoid cutting off words
+                self.speech_buffer.extend(audio_chunk)
                 self.silence_chunks += 1
                 if self.silence_chunks >= self.max_silence_chunks:
                     if len(self.speech_buffer) > 0:

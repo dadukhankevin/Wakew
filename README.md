@@ -2,7 +2,7 @@
 
 No, I don't know how it's pronounced.
 
-Real-time wake word detection using fine-tuned Whisper models. Detects wake words anywhere in speech, supports multiple wake words, and uses synthetic training data.
+Real-time wake word detection using fine-tuned Whisper models. Detects wake words anywhere in speech, supports multiple wake words, uses synthetic training data, and includes voice assistant features.
 
 ## Features
 
@@ -10,6 +10,9 @@ Real-time wake word detection using fine-tuned Whisper models. Detects wake word
 - Detects wake words anywhere in speech 
 - Real-time processing with voice activity detection
 - GPU acceleration (CUDA/MPS/CPU)
+- **Voice assistant integration** with interruption detection
+- **Simple transcription** - transcribe next speech input
+- **Threading support** for non-blocking callbacks
 - Simple API
 
 ## Quick Start
@@ -55,16 +58,64 @@ python multi_trainer.py --wake_words "jarvis,alexa,computer" --auto_discover --m
 
 ## API
 
+### Basic Wake Word Detection
+
 ```python
-MultiWakeWordDetector(model_path, wake_words=None, callback=None, verbose=False)
+MultiWakeWordDetector(model_path, wake_words=None, callback=None, 
+                     interruption_callback=None, verbose=False)
 ```
 
+**Parameters:**
 - `model_path`: Path to trained model
 - `wake_words`: List of wake words (auto-loads from model if None)  
 - `callback`: Function called with (wake_word, transcription)
+- `interruption_callback`: Function called when speech interrupts assistant response
 - `verbose`: Print debug info
 
-Methods: `start_listening()`, `start_listening_with_input()`
+**Methods:**
+- `start_listening()` - Start continuous wake word detection
+- `start_listening_with_input()` - Start detection, stop with Enter key
+- `transcribe_next_speech(timeout=10.0)` - Wait for speech and transcribe it
+- `set_assistant_speaking(speaking)` - Set assistant speaking state for interruption detection
+
+### Voice Assistant Integration
+
+```python
+def wake_word_callback(wake_word, transcription):
+    # Generate response
+    response = generate_response(transcription)
+    
+    # Tell detector assistant is speaking
+    detector.set_assistant_speaking(True)
+    
+    # Play TTS response
+    play_tts(response)
+    
+    # Done speaking
+    detector.set_assistant_speaking(False)
+
+def interruption_callback():
+    # User interrupted - stop TTS
+    stop_tts()
+    detector.set_assistant_speaking(False)
+
+detector = MultiWakeWordDetector(
+    model_path="./whisper-multi-wake-word",
+    callback=wake_word_callback,
+    interruption_callback=interruption_callback
+)
+```
+
+### Simple Transcription
+
+```python
+detector = MultiWakeWordDetector("./whisper-multi-wake-word")
+
+# Wait for user speech and transcribe
+user_input = detector.transcribe_next_speech(timeout=15.0)
+if user_input:
+    print(f"User said: {user_input}")
+```
 
 ## Training
 

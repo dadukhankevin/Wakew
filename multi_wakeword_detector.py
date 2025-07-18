@@ -6,9 +6,11 @@ import sounddevice as sd
 from transformers import WhisperProcessor, WhisperForConditionalGeneration
 import webrtcvad
 import os
+import threading
+import time
 
 class MultiWakeWordDetector:
-    def __init__(self, model_path, wake_words=None, callback=None, sample_rate=16000, verbose=False):
+    def __init__(self, model_path, wake_words=None, callback=None, interruption_callback=None, sample_rate=16000, verbose=False):
         """
         Initialize multi-wake word detector.
         
@@ -16,13 +18,19 @@ class MultiWakeWordDetector:
             model_path: Path to fine-tuned Whisper model
             wake_words: List of wake words to detect or None to auto-load from model
             callback: Function to call when wake word is detected (receives wake_word, transcription)
+            interruption_callback: Function to call when speech is detected during assistant response
             sample_rate: Audio sample rate (default 16000)
             verbose: Print debug information
         """
         self.model_path = model_path
         self.callback = callback
+        self.interruption_callback = interruption_callback
         self.sample_rate = sample_rate
         self.verbose = verbose
+        
+        # Assistant state management
+        self.assistant_speaking = False
+        self.callback_lock = threading.Lock()
         
         # Load wake words
         if wake_words is None:
@@ -127,14 +135,39 @@ class MultiWakeWordDetector:
                 print(f"🚨 WAKE WORDS {[w.upper() for w in detected_words]} DETECTED!")
         
         if self.callback:
-            for wake_word in detected_words:
-                self.callback(wake_word, transcription)
+            # Run callback in separate thread to avoid blocking audio processing
+            def run_callback():
+                with self.callback_lock:
+                    for wake_word in detected_words:
+                        self.callback(wake_word, transcription)
+            
+            threading.Thread(target=run_callback, daemon=True).start()
+    
+    def on_interruption_detected(self):
+        """Handle interruption during assistant speech"""
+        if self.verbose:
+            print("🔇 INTERRUPTION DETECTED!")
+        
+        if self.interruption_callback:
+            # Run interruption callback in separate thread
+            threading.Thread(target=self.interruption_callback, daemon=True).start()
+    
+    def set_assistant_speaking(self, speaking):
+        """Set whether the assistant is currently speaking"""
+        self.assistant_speaking = speaking
+        if self.verbose:
+            status = "started" if speaking else "stopped"
+            print(f"🔊 Assistant {status} speaking")
     
     def audio_callback(self, indata, frames, time, status):
         """Audio stream callback"""
         audio_chunk = indata[:, 0]
         
         if self.is_speech(audio_chunk):
+            # Check for interruption during assistant speech
+            if self.assistant_speaking and not self.is_recording:
+                self.on_interruption_detected()
+            
             if not self.is_recording:
                 self.is_recording = True
                 self.speech_buffer = []
@@ -200,6 +233,73 @@ class MultiWakeWordDetector:
             dtype=np.float32
         ):
             input()
+    
+    def transcribe_next_speech(self, timeout=10.0):
+        """
+        Wait for the next voice activity, transcribe it, and return the result.
+        This is a blocking call that returns when speech is detected and processed.
+        
+        Args:
+            timeout: Maximum time to wait for speech in seconds (default 10.0)
+            
+        Returns:
+            str: Transcribed text, or None if timeout or no speech detected
+        """
+        if self.verbose:
+            print("🎤 Waiting for speech...")
+        
+        transcription_result = [None]  # Use list to allow modification in nested function
+        speech_detected = threading.Event()
+        
+        def transcribe_callback(indata, frames, time, status):
+            """Callback for transcription mode"""
+            audio_chunk = indata[:, 0]
+            
+            if self.is_speech(audio_chunk):
+                if not self.is_recording:
+                    self.is_recording = True
+                    self.speech_buffer = []
+                
+                self.speech_buffer.extend(audio_chunk)
+                self.silence_chunks = 0
+            else:
+                if self.is_recording:
+                    # Add silence chunk to buffer to avoid cutting off words
+                    self.speech_buffer.extend(audio_chunk)
+                    self.silence_chunks += 1
+                    if self.silence_chunks >= self.max_silence_chunks:
+                        if len(self.speech_buffer) > 0:
+                            speech_audio = np.array(self.speech_buffer)
+                            if len(speech_audio) >= self.sample_rate * 0.5:
+                                transcription = self.process_audio(speech_audio)
+                                transcription_result[0] = transcription
+                                if self.verbose:
+                                    print(f"📝 Transcribed: '{transcription}'")
+                        
+                        self.is_recording = False
+                        self.speech_buffer = []
+                        speech_detected.set()  # Signal that transcription is complete
+        
+        # Reset state
+        self.is_recording = False
+        self.speech_buffer = []
+        self.silence_chunks = 0
+        
+        # Start listening for transcription
+        with sd.InputStream(
+            samplerate=self.sample_rate,
+            channels=1,
+            blocksize=self.chunk_size,
+            callback=transcribe_callback,
+            dtype=np.float32
+        ):
+            # Wait for speech detection or timeout
+            if speech_detected.wait(timeout=timeout):
+                return transcription_result[0]
+            else:
+                if self.verbose:
+                    print("⏰ Transcription timeout - no speech detected")
+                return None
 
 # Example usage
 def example_callback(wake_word, transcription):
@@ -214,13 +314,38 @@ def example_callback(wake_word, transcription):
         print("🔵 Alexa activated!")
     elif wake_word == "computer":
         print("💻 Computer ready!")
+    
+    # Simulate assistant response (you'd replace this with actual TTS/response)
+    detector.set_assistant_speaking(True)
+    time.sleep(2)  # Simulate speaking for 2 seconds
+    detector.set_assistant_speaking(False)
+
+def example_interruption_callback():
+    print("🛑 User interrupted! Stopping assistant response...")
+    # Here you would stop TTS, cancel current response, etc.
+
+def demo_transcription():
+    """Demo the transcription feature"""
+    detector = MultiWakeWordDetector(
+        model_path="./whisper-multi-wake-word",
+        verbose=True
+    )
+    
+    print("Transcription demo - say something!")
+    result = detector.transcribe_next_speech(timeout=15.0)
+    
+    if result:
+        print(f"You said: '{result}'")
+    else:
+        print("No speech detected within timeout")
 
 def main():
-    # Example: Multi-wake word detector
+    # Example: Multi-wake word detector with interruption support
     detector = MultiWakeWordDetector(
         model_path="./whisper-multi-wake-word",
         # wake_words=["jeeves", "jarvis", "alexa", "computer"],  # Optional - auto-loads from model
         callback=example_callback,
+        interruption_callback=example_interruption_callback,
         verbose=True
     )
     
